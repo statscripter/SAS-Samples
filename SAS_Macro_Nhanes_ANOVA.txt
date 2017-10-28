@@ -2,6 +2,12 @@
   	analysis plan applied to the NHANES data set from
   	2011
 
+        Team Members:
+        Jose Reynoso, Email: jreynoso28@horizon.csueastbay.edu
+        "Marie" Qianmin Li,  Email: qli9@horizon.csueastbay.edu
+        Michael Archibeque, Email: marchibeque@horizon.csueastbay.edu
+
+
 	Analysis Plan Step 1: Create SAS Transport file
 
 	Presenter: Jose Reynoso

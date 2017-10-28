@@ -1,0 +1,372 @@
+/*	Document Overview: The code below implements an 
+  	analysis plan applied to the NHANES data set from
+  	2011
+
+	Analysis Plan Step 1: Create SAS Transport file
+
+	Presenter: Jose Reynoso
+  	Presenter Email: jreynoso28@horizon.csueastbay.edu
+
+	Step Overview: Import Excel files to SAS & create SAS
+	Transport file. 
+
+	Step Rationale: We want to create SAS data files that can
+	be easily downloaded from the cloud.  First we need to 
+	import the Excel files into SAS, then output the 
+	resulting SAS datafiles as a SAS Transport file to our 
+	flash drive.
+
+	We uploaded three files from Excel to SAS:  BloodData1,
+	BloodData2, and Gender.  BloodData1 and BloodData2 came
+	from the same data source.  These two data sets were
+	parsed vertically so that we could later merge them 
+	back together.  Gender was a different file that shared
+        the same unique ID, which will later be merged 
+	horizontally.
+
+	Then, a a SAS Transport file was created with path:
+	"E:\stat6863-01 summer2015-presentation1-group_5_data.xpt";
+
+	In particular, each Excel file is first converted to a
+	SAS dataset in the library dataout using proc import,
+	and then a SAS Transport comprising the three datasets
+	is created using proc cport.
+
+	The following code was used to create the transport file:
+
+
+	libname dataout "E:\Project1";
+	filename tranfile "E:\stat6863-01 summer2015-presentation1-group_5_data.xpt";
+        proc import
+            file="E:\Project1\BloodData1.xlsx"
+            out=dataout.blood1
+            dbms=xlsx REPLACE
+	;
+	run;
+
+	proc import
+            file="E:\Project1\BloodData2.xlsx"
+            out=dataout.blood2
+            dbms=xlsx REPLACE
+	;
+        run;
+
+        proc import
+	   file="E:\Project1\Gender.xlsx"
+           out=dataout.gender
+           dbms=xlsx REPLACE
+	; 
+        run;
+
+	proc cport
+            library=dataout
+            file=tranfile
+            memtype=data
+        	;
+        run;
+
+	Finally, the SAS transport file was then uploaded to
+	Dropbox and a file-sharing link was obtained so that all
+	three datasets can be loaded into the Work library using
+  	proc http and proc cimport.
+	
+ 	By loading the SAS datafiles from Dropbox
+	we avoid needing to bring a flashdrive or change the path
+	names to match the name of a local computer drive.  
+
+	SAS Usage Notes: After uploading the SAS Transport file to
+	Dropbox, we found the url for the file by opening the link 
+	and copying the url from the web browser.  We cannot simply
+	use the "share" url because SAS won't click "download."  
+
+	In particular, the "share" url is:
+	"https://www.dropbox.com/s/l9dt3bb6slitsgs/stat6863-01%20summer2015-presentation1-group_5_data.xpt?dl=0"
+
+	The url that proc http can read is: 
+	"https://https://dl.dropbox.com/s/l9dt3bb6slitsgs/stat6863-01%20summer2015-presentation1-group_5_data.xpt?dl=0"
+
+*/
+
+/*      options to faciliate monitoring of macro usage throughout the program*/
+
+        options
+        symbolgen
+        mcompilenote=noautocall
+        mprint
+        mprintnest
+        mlogic
+        mlogicnest
+;
+
+/* 	Next we use the code to get the data set */
+        filename _inbox TEMP;
+
+        filename _inbox TEMP;
+
+/* 	The following macro creates a macro named "DataURL".
+	To change the program so that it works with another data set, 
+	we would just need to change the the value of the macro 
+	variable.
+*/
+
+        %let DataURL=https://dl.dropbox.com/s/l9dt3bb6slitsgs/stat6863-01%20summer2015-presentation1-group_5_data.xpt?dl=0;
+
+/*	Proc http allows us to get the data from the URL provided.
+	With the use of a macro, the & symbol indicates that to 
+	call the previously stored value of the macro DataURL.
+*/
+
+        proc http
+        method="get" 
+        url="&DataURL."
+        out=_inbox
+        ;
+        run;
+
+        proc cimport
+        library=work
+        infile=_inbox
+        ;
+        run;
+        filename _inbox clear;
+
+/* 	Analysis Plan Step 2: Cleaning Files and Eliminating
+  	Extraneous Variables by Macro statement 
+ 	
+  	Presenter: "Marie" Qianmin Li 
+  	Presenter Email:qli9@horizon.csueastbay.edu
+
+  	Step Overview: We cleaned the three source files: BloodData1,
+	BloodData2 and Gender by using %Macro cleaning statement.
+
+	Step Rationale: Since each of these three dataset contains 
+	over 20 variables, and we are only interested in three variable 
+	values from BloodData1,BloodData2, and only one variable from 
+	Gender. We streamlined our virtual workspace by eliminating 
+	unnecessary variables. The following macro create a data set 
+	with name &dataset._cleaned by reading in the two datasets 
+	&dataset and &ID and performing the following business logic: 
+	For each variable name appearing in the column &ID of &DataSet, 
+	a macro variable is created whose value comprises all 
+	corresponding values in the column & var1,var2,var3.
+*/ 
+
+        %macro clean(dataset,ID,var1,var2,var3);
+
+        data &dataset._cleaned;
+	keep
+	&ID.
+	&var1.
+	&var2.
+	&var3.
+	new&var1.
+	new&var2.
+	new&var3.
+	;
+
+/*	Because SAS defines this var1, var2, var3 as character values instead 
+	of numeric, that is why we need to drop it and rename it. Input means 
+	define variable format, best 8 is numeric format length
+*/ 
+
+	set &dataset.;
+
+	new&var1.=input(&var1.,best8.);
+	drop &var1.;
+	rename new&var1.=&var1.;
+
+	new&var2.=input(&var2.,best8.);
+	drop &var2.;
+	rename new&var2.=&var2.;
+
+	new&var3.=input(&var3.,best8.);
+	drop &var3.;
+	rename new&var3.=&var3.;
+
+        run;
+
+        %mend;
+
+/*	now call the macro using the original data  */
+
+        %clean(Blood1,Respondent_Sequence_Number,Red_blood_cell_count,Hemoglobin,Hematocrit)
+        %clean(Blood2,Respondent_Sequence_Number,Red_blood_cell_count,Hemoglobin,Hematocrit)
+
+/* 	For the data of Gender, we could not apply Macro because it does 
+	not contain the variables that other two has, we have to use regular 
+	Proc to clean this particular data.  Here, we use Keep statement
+*/
+
+        data Gender_cleaned;
+	keep
+	Respondent_Sequence_Number
+	Gender
+	;
+
+	set Gender;
+
+        run;
+
+/* 	Analysis Plan Step 3: Merging cleaned data 
+ 
+  	Presenter: "Marie" Qianmin Li 
+  	Presenter Email:qli9@horizon.csueastbay.edu
+
+  	Step Overview: We merge the cleaned data, BloodData1,
+	BloodData2 and Gender, vertically and horizontally.
+
+
+  	Step Rationale: after cleaning the data, we have the variable 
+	we are interested in to analyze, now we should merge them into 
+	one dataset. We also use Macro statement. The following Macro 
+	create a merged data set comprises three data set, data1, data2, 
+	data3. We merge them by their common variable: ID.
+*/
+
+        %macro merged_data(data1,data2,data3,ID);
+
+        data Blood_Merged;
+	    set &data1.;
+        run;
+
+/* 	First the vertical merge for the blood data sets */
+
+        proc append
+	base=Blood_Merged
+	data=&data2.;
+        run;
+
+/*	Next the horizontal merge to add the gender variable to the 
+	merged blood data set */
+
+        data All_merged;
+	merge
+	Blood_Merged
+	&data3.
+	;
+	by &ID.;
+
+        run;
+
+        %mend;
+
+/* 	now call the macro using the cleaned data */
+
+        %merged_data(Blood1_cleaned,Blood2_cleaned,Gender_cleaned,Respondent_Sequence_Number)
+
+
+/* 	Analysis Plan: Post-Merge Cleaning: No missing and no 
+   	duplicate primary key. 
+
+   	Presenter: Michael Archibeque
+   	Presenter Email: marchibeque@horizon.csueastbay.edu
+
+   	Step Overview: In this steps we created one macro 
+	program that includes a Proc Sort and Proc Print to 
+	confirm there were no missing and no duplicate primary 
+	keys. 
+
+	Note: That the parameters for the macro program
+	include both a positional parameter and keyword
+	parameter. The primary key positional parameter 
+	always needs input from the user based on the users 
+	judgement. The data set keyword parameter often will be
+	the last data set used, so the global macro variable
+	syslast is the default but by using a keyword
+	parameter, the user can specify a different data set
+	than the last data set. 
+
+	Step Rationale: We need to confirmed that each 
+	observation is unique. Because both procs required the 
+	same arguments and often accompany each other, 
+	we created one macro program that included both procs. 
+*/
+
+
+        %macro nomissing_nodup_primarykey(primary_key, data_set=&syslast); 
+
+        proc print data=&data_set;
+        where missing(&primary_key);
+        run;
+
+        proc sort nodupkey data=&data_set out=_null_;
+	by &primary_key;
+        run;
+
+        %mend;
+
+/*      Note: This is calling the macro program for execution that
+	was previously compiled. */ 
+
+        %nomissing_nodup_primarykey(Respondent_Sequence_Number, data_set=all_merged);
+
+/*	Analysis Plan: Data Analysis - ANOVA
+
+	Presenter: Michael Archibeque
+  	Presenter Email: marchibeque@horizon.csueastbay.edu
+
+	Step Overview: In this steps we created one macro 
+	program that includes a Data Set, Proc Sort, and Proc
+	ANOVA.
+
+	Note: That the parameters for the macro program
+	include both a positional parameter and keyword
+	parameter. The variable and class positional parameters 
+	always need input from the user based on the user's 
+	judgement. The variable_minimum and data set keyword 
+	parameters often will be zero and the last data set 
+	used, respectively, so zero is the default the 
+	variable minimum and the global macro variable
+	syslast is the default for data set, but, by using
+	a keyword parameter, the user can specify a different 
+	variable minimum and data set.
+
+	Step Rationale: We wanted to confirm whether or not 
+	there is a statistically significant difference between
+	the mean value of a variable when multiple levels of a 
+	class are compared. 
+*/
+
+        %macro anova(variable, class, variable_minimum=0,
+	data_set=&syslast);
+
+/* 	Note: The data set creates new data sets with the 
+	variable value incorporated into a prescribed 
+	naming convention */
+
+        data &variable._data_set;
+	set All_merged;
+		if &variable < &variable_minimum then delete;
+        run;
+
+/* 	Note: The syslast used to identify the data set to be
+	sorted will always be the data set created by the 
+	previous data step. */ 
+
+        proc sort data=&syslast;
+	by &class;
+        run;
+
+/* 	Note: The syslast used to identify the data set to be
+	analysed by the PROC ANOVA will always be the data set
+	created by the data step that was sorted by the PROC 
+	SORT in the previous step. */ 
+        proc anova data=&syslast;
+	class &class;
+	model &variable = &class;
+	means &class;
+        run;
+
+        %mend;
+
+/*      Note: This is calling the macro program for execution that
+	was previously compiled. */
+
+        %anova(Red_blood_cell_count, gender);
+        %anova(hemoglobin, gender, variable_minimum=0);
+        %anova(Hematocrit, gender, variable_minimum=0, data_set=
+		blood_data_set);
+
+
+
+
